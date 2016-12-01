@@ -49,7 +49,11 @@ from zipline.errors import (
 from . import (
     Asset, Equity, Future,
 )
-from . continuous_futures import OrderedContracts, ContinuousFuture
+from . continuous_futures import (
+    OrderedContracts,
+    ContinuousFuture,
+    CHAIN_PREDICATES
+)
 from .asset_writer import (
     check_version_info,
     split_delimited_symbol,
@@ -193,7 +197,7 @@ class AssetFinder(object):
     PERSISTENT_TOKEN = "<AssetFinder>"
 
     @preprocess(engine=coerce_string_to_eng)
-    def __init__(self, engine):
+    def __init__(self, engine, future_chain_predicates=CHAIN_PREDICATES):
         self.engine = engine
         metadata = sa.MetaData(bind=engine)
         metadata.reflect(only=asset_db_table_names)
@@ -213,6 +217,8 @@ class AssetFinder(object):
         # retrieve_asset will populate the cache on first retrieval.
         self._caches = (self._asset_cache, self._asset_type_cache) = {}, {}
 
+        self._future_chain_predicates = future_chain_predicates \
+            if future_chain_predicates is not None else {}
         self._ordered_contracts = {}
 
         # Populated on first call to `lifetimes`.
@@ -903,7 +909,9 @@ class AssetFinder(object):
         except KeyError:
             contract_sids = self._get_contract_sids(root_symbol)
             contracts = deque(self.retrieve_all(contract_sids))
-            oc = OrderedContracts(root_symbol, contracts)
+            chain_predicate = self._future_chain_predicates.get(root_symbol,
+                                                                None)
+            oc = OrderedContracts(root_symbol, contracts, chain_predicate)
             self._ordered_contracts[root_symbol] = oc
             return oc
 
